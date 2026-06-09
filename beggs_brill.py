@@ -164,3 +164,96 @@ def holdup_liquido(HlO, psi, holdup_L):
     HL = max(HL, holdup_L)  # HL nunca menor que o no-slip
     HL = min(HL, 1.0)
     return HL
+
+
+"""Gradiente de pressão — Beggs & Brill"""
+
+def densidade_noslip(pho_l, pho_g, holdup_L):
+    """Densidade No-Slip da mistura:
+    rho_NS = rho_L * lambda_L + rho_g * (1 - lambda_L)"""
+    pho_NS = pho_l * holdup_L + pho_g * (1 - holdup_L)
+    return pho_NS
+
+
+def densidade_slip(pho_l, pho_g, HL):
+    """Densidade Slip da mistura (usa holdup real H_L):
+    rho_SLIP = rho_L * H_L + rho_g * (1 - H_L)"""
+    pho_slip = pho_l * HL + pho_g * (1 - HL)
+    return pho_slip
+
+
+def viscosidade_noslip(mu_l, mu_g, holdup_L):
+    """Viscosidade No-Slip da mistura:
+    mu_NS = mu_L * lambda_L + mu_g * (1 - lambda_L)"""
+    mu_NS = mu_l * holdup_L + mu_g * (1 - holdup_L)
+    return mu_NS
+
+
+def reynolds_noslip(pho_NS, Vm, Dh, mu_NS):
+    """Número de Reynolds No-Slip:
+    Re_NS = rho_NS * Vm * Dh / mu_NS"""
+    Re_NS = (pho_NS * Vm * Dh) / mu_NS
+    return Re_NS
+
+
+def fator_atrito_noslip(Re_NS, eps, Dh):
+    """Fator de atrito No-Slip — Correlação de Hall:
+    fN = 0.0055 * [1 + (2e4 * eps/Dh + 1e6/Re_NS)^(1/3)]"""
+    fN = 0.0055 * (1 + (2e4 * (eps / Dh) + 1e6 / Re_NS) ** (1/3))
+    return fN
+
+
+def parametro_s(holdup_L, HL):
+    """Parâmetro s para correção do fator de atrito bifásico.
+    y = lambda_L / H_L²
+    Se 1.0 < y < 1.2:  s = ln(2.2*y - 1.2)
+    Fora desse intervalo: s = ln(y) / (-0.0523 + 3.182*ln(y) - 0.8725*ln(y)² + 0.01853*ln(y)^4)
+    """
+    y = holdup_L / HL**2
+
+    if 1.0 < y < 1.2:
+        s = np.log(2.2 * y - 1.2)
+    else:
+        ln_y = np.log(y)
+        s = ln_y / (-0.0523 + 3.182 * ln_y - 0.8725 * ln_y**2 + 0.01853 * ln_y**4)
+
+    return s
+
+
+def fator_atrito_bifasico(fN, s):
+    """Fator de atrito bifásico:
+    fTP = e^s * fN"""
+    fTP = np.exp(s) * fN
+    return fTP
+
+
+def gradiente_friccao(fTP, pho_NS, Vm, Dh):
+    """Gradiente de pressão por fricção:
+    dP/dL|_F = fTP * rho_NS * Vm² / (2 * Dh)"""
+    dPdL_F = fTP * pho_NS * Vm**2 / (2 * Dh)
+    return dPdL_F
+
+
+def gradiente_gravitacional(pho_slip, g, theta):
+    """Gradiente de pressão gravitacional:
+    dP/dL|_G = rho_slip * g * sin(theta)
+    theta em graus (positivo = ascendente)"""
+    dPdL_G = pho_slip * g * np.sin(np.radians(theta))
+    return dPdL_G
+
+
+def parametro_EK(pho_slip, Vm, Vsg, P):
+    """Parâmetro de aceleração:
+    EK = rho_slip * Vm * Vsg / P"""
+    EK = (pho_slip * Vm * Vsg) / P
+    return EK
+
+
+def gradiente_total(dPdL_F, dPdL_G, EK):
+    """Gradiente de pressão total Beggs & Brill:
+    dP/dL|_T = (-(dP/dL|_F) - (dP/dL|_G)) / (1 - EK)
+
+    O termo de aceleração é incorporado via EK, eliminando necessidade
+    de calcular dP/dL|_A separadamente."""
+    dPdL_T = (-(dPdL_F) - (dPdL_G)) / (1 - EK)
+    return dPdL_T
