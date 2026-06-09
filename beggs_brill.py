@@ -81,11 +81,11 @@ def padrao_escoamento(L1, L2, L3, L4, holdup_L, Frm):
         flag=1
 
     #Segragado
-    if (holdup_L < 0.01 and Frm < L1) or (holdup_L >= 0.01 and Frm < L2):
+    if (holdup_L < 0.01 and Frm < L1) or (holdup_L >= 0.001 and Frm < L2):
         flag = 2
 
     #Transição
-    if (holdup_L >= 0.01 and L2 <= Frm <= L3 ):
+    if (holdup_L >= 0.001 and L2 <= Frm <= L3 ):
         flag = 3
 
     #Intermitente
