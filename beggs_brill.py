@@ -95,7 +95,6 @@ def padrao_escoamento(L1, L2, L3, L4, holdup_L, Frm):
     return flag
 
 def HLO(flag, holdup_L, Frm, L2, L3):
-
     if flag == 1:
         HlO = (1.065 * holdup_L**0.5824) / (Frm**0.0609)
 
@@ -114,3 +113,54 @@ def HLO(flag, holdup_L, Frm, L2, L3):
 
     return HlO
 
+
+def numero_velocidade_liquido(Vsl, pho_l, g, tensao_lg):
+    """N_LV = Vsl * (rho_L / (g * sigma_GL))^(1/4)"""
+    NLV = Vsl * (pho_l / (g * tensao_lg)) ** 0.25
+    return NLV
+
+
+def psi_inclinacao(flag, holdup_L, Frm, NLV, theta, L2, L3):
+    """
+    Parâmetro de correção da inclinação psi.
+    theta: ângulo em graus (positivo = ascendente, negativo = descendente)
+    Frm: número de Froude modificado (Vm²/g·d)
+    """
+    if theta >= 0:  # ascendente
+        if flag == 1:  # Distribuído: sem correção
+            C = 0.0
+
+        elif flag == 2:  # Segregado
+            d, e, f, g = 0.011, -3.768, 3.539, -1.614
+            C = (1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g)
+            C = max(C, 0.0)
+
+        elif flag == 3:  # Transição — interpola C entre segregado e intermitente
+            d_s, e_s, f_s, g_s = 0.011, -3.768, 3.539, -1.614
+            d_i, e_i, f_i, g_i = 2.960, 0.305, -0.4473, 0.0978
+            C_seg = max((1 - holdup_L) * np.log(d_s * holdup_L**e_s * NLV**f_s * Frm**g_s), 0.0)
+            C_int = max((1 - holdup_L) * np.log(d_i * holdup_L**e_i * NLV**f_i * Frm**g_i), 0.0)
+            A = (L3 - Frm) / (L3 - L2)
+            C = A * C_seg + (1 - A) * C_int
+
+        elif flag == 4:  # Intermitente
+            d, e, f, g = 2.960, 0.305, -0.4473, 0.0978
+            C = (1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g)
+            C = max(C, 0.0)
+
+    else:  # descendente — mesmos coeficientes para todos os padrões
+        d, e, f, g = 4.700, -0.3692, 0.1244, -0.5056
+        C = (1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g)
+        C = max(C, 0.0)
+
+    theta_rad = np.radians(1.8 * theta)
+    psi = 1 + C * (np.sin(theta_rad) - 0.333 * np.sin(theta_rad)**3)
+    return C, psi
+
+
+def holdup_liquido(HlO, psi, holdup_L):
+    """H_L = H_LO * psi, limitado entre lambda_L e 1"""
+    HL = HlO * psi
+    HL = max(HL, holdup_L)  # HL nunca menor que o no-slip
+    HL = min(HL, 1.0)
+    return HL
