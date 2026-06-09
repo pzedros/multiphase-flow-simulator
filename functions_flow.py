@@ -1,17 +1,34 @@
 import numpy as np
 import pandas as pd
 
-
-# def API(x):
-#     return x
-
-#Rs
-#dg
-
-
+#======================================================================================================================#
+"""Propriedades PVT da fase Óleo"""
 
 
 """Correlações: Usaremos as de Standing """
+
+def do(pho_o):
+    """É a razão entre a massa específica do óleo e a massa específica da água,
+    ambas medidas na mesma condição de Pressão ( ) e Temperatura ( ).
+    onde,
+    do é a  densidade relativa do óleo
+    pho_o é a massa específica do óleo [Kg/m³]
+    pho_w é a massa específica da água [Kg/m³]"""
+    pho_w = 1000 #[Kg/m³]
+    do = pho_o/pho_w
+    return do
+
+def grauAPI(do):
+    API = (141.5 / do ) - 131.5
+    return API
+
+def  calcular_api_do(API= None, do=None):
+    if API is not None and do is None:
+        do = 141.5/(API+131.5)
+    elif API is None and do is not None:
+        API = (141.5 / do) - 131.5
+
+    return API, do
 
 def pressao_bolha(Rs, dg, Tf, API): #
     a = 0.00091*Tf - 0.0125 * API
@@ -38,19 +55,6 @@ def bo(Rs, dg, do, Tf, P, Pb, Co, RGL):
         Bo = 0.9759 + 0.00012 * (Rs * (dg / do) ** 0.5 + 1.25 * Tf) ** 1.2
     return Bo, Bob
 
-
-
-#Fator Volume_Formação_Total ?????????????????
-
-
-# def compress_oleo(P, Pb, pho_o):
-#     if P >= Pb:
-#
-#
-#
-#     return Co
-
-
 def pho_o_insitu(do, Rs, dg, Bo, Bob, P, Pb, Co, RGL, Tf):
 
     #pho_o_insitu Massa específica do óleo [lb/ft³]
@@ -62,10 +66,10 @@ def pho_o_insitu(do, Rs, dg, Bo, Bob, P, Pb, Co, RGL, Tf):
 
     if P > Pb:
         pho_o = pho_ob * np.exp(Co*(P-Pb))
+
     else:
         #P <= Pb
         pho_o = (62.4*do + 0.0136*Rs*dg)/Bo
-
     return pho_o, pho_ob
 
 def compressibilidade_oleo(P, Tf, dg, do, Rs, Bob, API, Bg, Pb, pho_ob):
@@ -108,45 +112,110 @@ def viscosidade_oleosaturado(Rs, mu_od, P, Pb):
 
     return mu_obs
 
-################
-"""Pedro vai implementar o gas"""
-#Código gás
-#Fator de Compressibilidade do Gás (Z) — Correlação de Papay de Termodinâmica
+#======================================================================================================================#
+"""Propriedades PVT da fase Gás"""
 
-def propriedades_pseudocriticas(dg):
+def dg(pho_g):
+    """É definida como a relação entre a massa específica de um gás e a massa específica do ar seco,
+    na mesma condição de Pressão ( ) e de Temperatura( ).
+    dg -> densidade relativa ou gravidade específica (adimensional)
+    pho_g -> massa específica de um gás [Kg/m/3]
+    pho_ar -> massa específica do ar [Kg/m/3]
+    Psc -> pressão na condição padrão  [Pa]
+    Tsc -> Temperatura na condição padrão [K]
+    """
+    pho_ar = 1.225 #[Kg/m³]
+    dg = pho_g/pho_ar
+    return dg
 
-    if dg >= 0.75:
-        #gas umido
-        Tpc = 187 + 330 * dg - 71.5 * dg**2  # [°R]
-        Ppc = 706 - 51.7 * dg - 11.1 * dg**2  # [psia]
-    else:
-        #gas seco
-        Tpc = 168 + 325 * dg - 12.5 * dg**2   # [°R]
-        Ppc = 677 + 15.0 * dg - 37.5 * dg**2  # [psia]
-    return Tpc, Ppc
+def propseudo(dg,P,TR):
+    #Prop. Pseudocríticas e Pseudoreduzidas
+    """
+    Quando é conhecido apenas a gravidade específica da mistura gasosautiliza-se as seguintes correlações:
+    onde,
+    P é a pressão absoluta
+    Ppc é a pressão pseudocrítica
+    T é a temperatura (em ºR Rankine)
+    Tpc é a temperatura pseudocrítica
+    """
 
-def fator_z(P, Tf, dg):
-    # Fator de compressibilidade do gás Z
-    # P [psia], Tf [°F], dg gravidade específica do gás
-    T_R = Tf + 459.67  # Fahrenheit → Rankine
+    Ppc = 0
+    Tpc = 0
+    if dg < 0.75: #Gás seco
+        Ppc = 677 + 15 * dg - 37.5 * dg**2
+        Tpc = 168 + 325 * dg - 12.5 * dg**2
 
-    Tpc, Ppc = propriedades_pseudocriticas(dg)
+    elif dg >= 0.75: #Gás umido
+        Ppc = 706 - 51.7 * dg - 11.1 * dg**2
+        Tpc = 187 + 330 * dg - 71.5 * dg**2
 
-    Tpr = T_R / Tpc   # Temperatura pseudo-reduzida
-    Ppr = P   / Ppc   # Pressão pseudo-reduzida
+    Ppr = P/Ppc
 
-    # Correlação de Papay
-    Z = 1 - (3.52 * Ppr) / (10**(0.9813 * Tpr)) + (0.274 * Ppr**2) / (10**(0.8157 * Tpr))
-    return Z
+    Tpr = TR/Tpc
 
-def bg(P, Tf, dg):
-    # Fator de Volume de Formação do Gás [bbl/SCF]
-    # Bg = 0.00504 * Z * T(°R) / P(psia)
-    T_R = Tf + 459.67
-    Z   = fator_z(P, Tf, dg)
-    Bg  = 0.00504 * Z * T_R / P
-    return Bg, Z
-################
+    return Ppc, Tpc, Ppr, Tpr
+
+def pho_g(P, Mg, Z, T):
+    #Cálculo de massa específica do gás
+    """É definida como a massa do gás ocupando um certo volume em pressão etemperatura especificada."""
+    R = 10.73 #cte universal dos gases
+    #8.314 Pa.m³ / mol . K
+    pho_g = (P * Mg)/(Z * R * T)
+    return pho_g
+
+def factor_Z(Ppc, Tpc, Ppr, Tpr):
+    #Correlação do Papay (1985)
+    z = 1 - ((3.53*Ppr)/(10**(0.9813*Tpr))) + ((0.274*Ppr**2)/(10**(0.8157*Tpr)))
+    return z
+
+def compress_gas(Z, Ppc, Ppr, Tpr):
+    """É definida como à variação relativa de volume do gás por variação unitáriade
+    pressão em temperatura constante (Bahadori, 2017).
+    Cg é a compressibilidade de gás [Pa^-¹]"""
+
+    #Cpr = (1/Ppr) - (1/Z) * (dZ_dPpr)_Tpr
+
+    dZ_dPpr = - (3.53/(10**(0.9813*Tpr))) + 2 * (0.274/10**(0.8157*Tpr)) * Ppr
+
+    Cpr = (1/Ppr) - (1/Z) * dZ_dPpr
+
+    Cg = Cpr/Ppc
+    return Cg
+
+def bg(T,P,Z):
+    #Fator Volume-Formação do Gás
+    """Em unidades de campo, Psc = 14.7 psia (pressão na condição de superfície) e Tsc = 60ºF (temperatura na condição de superfície),
+    ou seja, nas condiçõespadrão."""
+    Psc = 14.7 #[psia]
+    Tsc = 520  #[°R] = 60°F + 460
+    Bg = Psc/Tsc * Z * T/P
+    return Bg
+
+def Eg(Bg):
+    """Eg é o fator de expansão do gás, m³ std/m³"""
+    Eg = 1/Bg
+    return Eg
+
+def viscosidade_fgas(pho_g, Mg, TR):
+    """Correlação de Lee et al. (1966)
+    onde,
+    mu_g é a viscosidade de gás, cP
+    pho_g é a densidade de gás, lb/ ft³
+    Temperatura (ºR)
+    Mg é o peso molecular do gás (lbm/lb mol)"""
+
+    #mu_g = 10**(-4) * Kv * np.exp(Xv*(pho_g/62.4)**Yv)
+
+    Xv = 3.448 + (986.4/TR) + 0.01009 * Mg
+    Yv = 2.4 - 0.2 * Xv
+
+    Kv = ((9.379 + 0.0160 * Mg) * TR**1.5)/(209.2 + 19.26 * Mg + TR)
+
+    mu_g = 10 ** (-4) * Kv * np.exp(Xv * (pho_g / 62.4) ** Yv) #[cP]
+    return mu_g
+
+
+#======================================================================================================================#
 """Propriedades PVT da fase Água"""
 
 def pho_w(S):
@@ -232,8 +301,7 @@ def viscosidade_agua(Tf, P, S):
 
 
 
-
-
+#======================================================================================================================#
 
 
 
