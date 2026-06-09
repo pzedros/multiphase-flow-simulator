@@ -253,7 +253,7 @@ def gradiente_total(dPdL_F, dPdL_G, EK):
     """Gradiente de pressão total Beggs & Brill:
     dP/dL|_T = (-(dP/dL|_F) - (dP/dL|_G)) / (1 - EK)
 
-    O termo de aceleração é incorporado via EK, eliminando necessidade
-    de calcular dP/dL|_A separadamente."""
+    O termo de aceleração é feito via EK, eliminando necessidade
+    de calcular dP/dL|_A soziho """"
     dPdL_T = (-(dPdL_F) - (dPdL_G)) / (1 - EK)
     return dPdL_T
