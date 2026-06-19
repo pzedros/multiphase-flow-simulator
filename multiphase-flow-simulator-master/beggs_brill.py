@@ -97,24 +97,18 @@ def padrao_escoamento(L1, L2, L3, L4, holdup_L, Frm):
 
     return flag
 
-def HLO(flag, holdup_L, Frm, L2, L3):
-    if flag == 1:
+def HLO(flag, holdup_L, Frm):
+    """Holdup horizontal (H_LO) — apenas flags 1, 2, 4.
+    Para transição (flag 3) use HL_transicao()."""
+    if flag == 1:    # Distribuído
         HlO = (1.065 * holdup_L**0.5824) / (Frm**0.0609)
-
-    elif flag == 2:
+    elif flag == 2:  # Segregado
         HlO = (0.98 * holdup_L**0.4846) / (Frm**0.0868)
-
-    elif flag == 3:
-        # Interpolação linear entre segregado e intermitente (Beggs & Brill, 1973)
-        A = (L3 - Frm) / (L3 - L2)
-        HlO_seg = (0.98 * holdup_L**0.4846) / (Frm**0.0868)
-        HlO_int = (0.845 * holdup_L**0.5351) / (Frm**0.0173)
-        HlO = A * HlO_seg + (1 - A) * HlO_int
-
-    elif flag == 4:
+    elif flag == 4:  # Intermitente
         HlO = (0.845 * holdup_L**0.5351) / (Frm**0.0173)
 
-    return HlO
+    # Condição B&B: H_LO >= lambda_L
+    return max(HlO, holdup_L)
 
 
 def numero_velocidade_liquido(Vsl, pho_l, g, tensao_lg):
@@ -123,50 +117,55 @@ def numero_velocidade_liquido(Vsl, pho_l, g, tensao_lg):
     return NLV
 
 
-def psi_inclinacao(flag, holdup_L, Frm, NLV, theta, L2, L3):
-    """
-    Parâmetro de correção da inclinação psi.
-    theta: ângulo em graus (positivo = ascendente, negativo = descendente)
-    Frm: número de Froude modificado (Vm²/g·d)
-    """
+def psi_inclinacao(flag, holdup_L, Frm, NLV, theta):
+    """Parâmetro de correção da inclinação.
+    ψ = 1 + C · {sin(1,8θ) - 0,333 · [sin(1,8θ)]³}
+    C = (1 - λ_L) · ln(d' · λ_L^e · N_LV^f · (Fr_m²)^g)
+    theta em graus (positivo = ascendente, negativo = descendente).
+    Apenas para flags 1, 2, 4. Para transição use HL_transicao()."""
     if theta >= 0:  # ascendente
-        if flag == 1:  # Distribuído: sem correção
+        if flag == 1:  # Distribuído: sem correção de inclinação
             C = 0.0
-
         elif flag == 2:  # Segregado
             d, e, f, g = 0.011, -3.768, 3.539, -1.614
-            C = (1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g)
-            C = max(C, 0.0)
-
-        elif flag == 3:  # Transição — interpola C entre segregado e intermitente
-            d_s, e_s, f_s, g_s = 0.011, -3.768, 3.539, -1.614
-            d_i, e_i, f_i, g_i = 2.960, 0.305, -0.4473, 0.0978
-            C_seg = max((1 - holdup_L) * np.log(d_s * holdup_L**e_s * NLV**f_s * Frm**g_s), 0.0)
-            C_int = max((1 - holdup_L) * np.log(d_i * holdup_L**e_i * NLV**f_i * Frm**g_i), 0.0)
-            A = (L3 - Frm) / (L3 - L2)
-            C = A * C_seg + (1 - A) * C_int
-
+            C = max((1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g), 0.0)
         elif flag == 4:  # Intermitente
             d, e, f, g = 2.960, 0.305, -0.4473, 0.0978
-            C = (1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g)
-            C = max(C, 0.0)
-
+            C = max((1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g), 0.0)
     else:  # descendente — mesmos coeficientes para todos os padrões
         d, e, f, g = 4.700, -0.3692, 0.1244, -0.5056
-        C = (1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g)
-        C = max(C, 0.0)
+        C = max((1 - holdup_L) * np.log(d * holdup_L**e * NLV**f * Frm**g), 0.0)
 
-    theta_rad = np.radians(1.8 * theta)
-    psi = 1 + C * (np.sin(theta_rad) - 0.333 * np.sin(theta_rad)**3)
+    sin_1_8_theta = np.sin(np.radians(1.8 * theta))
+    psi = 1 + C * (sin_1_8_theta - 0.333 * sin_1_8_theta**3)
     return C, psi
 
 
 def holdup_liquido(HlO, psi, holdup_L):
-    """H_L = H_LO * psi, limitado entre lambda_L e 1"""
-    HL = HlO * psi
-    HL = max(HL, holdup_L)  # HL nunca menor que o no-slip
-    HL = min(HL, 1.0)
-    return HL
+    """H_L = H_LO · ψ quando H_LO > λ_L, senão H_L = λ_L"""
+    if HlO > holdup_L:
+        HL = HlO * psi
+    else:
+        HL = holdup_L
+    return min(HL, 1.0)
+
+
+def HL_transicao(holdup_L, Frm, NLV, theta, L2, L3):
+    """Holdup real para padrão de transição (B&B).
+    H_L(trans) = A · H_L(Seg) + (1 - A) · H_L(Interm)
+    A = (L3 - Fr_m²) / (L3- L2)
+    A interpolação é feita sobre H_L (com ψ já aplicado), não sobre H_LO."""
+    A = (L3 - Frm) / (L3 - L2)
+
+    HlO_seg = HLO(2, holdup_L, Frm)
+    _, psi_seg = psi_inclinacao(2, holdup_L, Frm, NLV, theta)
+    HL_seg = holdup_liquido(HlO_seg, psi_seg, holdup_L)
+
+    HlO_int = HLO(4, holdup_L, Frm)
+    _, psi_int = psi_inclinacao(4, holdup_L, Frm, NLV, theta)
+    HL_int = holdup_liquido(HlO_int, psi_int, holdup_L)
+
+    return A * HL_seg + (1 - A) * HL_int
 
 
 """Gradiente de pressão — Beggs & Brill"""
