@@ -38,6 +38,9 @@ qm_kg_s = Q_m3s * 880.0
 DIAMETROS_POL = [5, 6, 7]   # polegadas
 CORES         = ["#1f77b4", "#d62728", "#2ca02c"]
 
+CONV   = 5.6146
+Rs_sup = RGL * CONV         # GOR total em scf/STB (730)
+
 # ============================================================
 # TOPOLOGIA (igual para todos os diâmetros)
 # ============================================================
@@ -82,7 +85,7 @@ def simular(D_m, sections):
     T_atual_C   = T_res_C
     L_acumulado = 0.0
 
-    Pb_ini_bar = fc.pressao_bolha(RGL, dg, T_res_C, API) * 0.0689476
+    Pb_ini_bar = fc.pressao_bolha(Rs_sup, dg, T_res_C, API) * 0.0689476
 
     dados = {
         "L_m": [0.0], "P_bar": [P_res_bar], "T_C": [T_res_C],
@@ -117,19 +120,19 @@ def simular(D_m, sections):
         Z = fc.factor_Z(Ppc, Tpc, Ppr, Tpr)
 
         Bg_ft3scf = (14.7 / 519.67) * Z * (TR / P_psia)
-        Bg_SI     = Bg_ft3scf * 0.0283168
+        Bg_SI     = Bg_ft3scf
 
-        Pb_psia = fc.pressao_bolha(RGL, dg, T_C, API)
+        Pb_psia = fc.pressao_bolha(Rs_sup, dg, T_C, API)
         Rs      = fc.rs_gas_oil(dg, P_bar, Pb_psia, API, T_C)
 
-        Bob    = 0.9759 + 0.00012 * (RGL * (dg / do_val) ** 0.5 + 1.25 * Tf) ** 1.2
+        Bob    = 0.9759 + 0.00012 * (Rs_sup * (dg / do_val) ** 0.5 + 1.25 * Tf) ** 1.2
         rho_ob = (62.4 * do_val + 0.0136 * Rs * dg) / Bob
 
         Co       = fc.compressibilidade_oleo(P_bar, T_C, dg, do_val, Rs, Bob, API, Bg_ft3scf, Pb_psia, rho_ob)
-        Bo       = fc.bo(Rs, dg, do_val, T_C, P_bar, Pb_psia, Co, RGL)
-        Bo_SI    = Bo * 0.158987
+        Bo       = fc.bo(Rs, dg, do_val, T_C, P_bar, Pb_psia, Co, Rs_sup)
+        Bo_SI    = Bo
 
-        rho_o_si = fc.pho_o_insitu(do_val, Rs, dg, Bo, Bob, P_bar, Pb_psia, Co, RGL, T_C) * 16.018463
+        rho_o_si = fc.pho_o_insitu(do_val, Rs, dg, Bo, Bob, P_bar, Pb_psia, Co, Rs_sup, T_C) * 16.018463
         mu_od    = fc.viscosidade_oleomorto(T_C, API)
         mu_o_cP  = fc.viscosidade_oleosaturado(Rs, mu_od, P_bar, Pb_psia)
         mu_o_Pas = mu_o_cP * 1e-3
@@ -147,7 +150,7 @@ def simular(D_m, sections):
 
         q_oil_s      = Q_m3s * (1.0 - BSW)
         q_wat_s      = Q_m3s * BSW
-        q_gas_livre  = max((RGL - Rs) * q_oil_s - rs_w_val * q_wat_s, 0.0)
+        q_gas_livre  = max((RGL - Rs / CONV) * q_oil_s - (rs_w_val / CONV) * q_wat_s, 0.0)
         q_gas_insitu = q_gas_livre * Bg_SI
         q_liq_insitu = q_oil_s * Bo_SI + q_wat_s * bw_val
 
@@ -196,6 +199,9 @@ def simular(D_m, sections):
         dp_total_Pa_m = -dPdL_T
         P_new_bar = P_atual_bar - dp_total_Pa_m * 1e-5 * dL
 
+        if P_new_bar < 1.0:
+            break
+
         T_amb_K   = T_amb_C + 273.15
         T_old_K   = T_atual_C + 273.15
         theta_rad = math.radians(theta)
@@ -215,7 +221,7 @@ def simular(D_m, sections):
         dados["L_m"].append(L_acumulado)
         dados["P_bar"].append(P_atual_bar)
         dados["T_C"].append(T_atual_C)
-        dados["Pb_bar"].append(fc.pressao_bolha(RGL, dg, T_new_C, API) * 0.0689476)
+        dados["Pb_bar"].append(fc.pressao_bolha(Rs_sup, dg, T_new_C, API) * 0.0689476)
         dados["Holdup"].append(HL)
         dados["Regime"].append(regime_str)
         dados["Vsl"].append(Vsl)
@@ -276,9 +282,7 @@ def plotar(var, titulo, ylabel, logy=False):
     ax.axvline(L_anm,      color="gray", linestyle="--", lw=1.2)
     ax.axvline(L_manifold, color="gray", linestyle=":",  lw=1.2)
     fig.tight_layout()
-    nome = var.replace("/", "_")
-    fig.savefig(f"BB_{nome}.png", dpi=150)
-    plt.close(fig)
+    plt.show()
 
 # Pressão (com Pb do primeiro diâmetro como referência)
 plt.figure(figsize=(11, 6))
