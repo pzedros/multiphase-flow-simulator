@@ -257,6 +257,7 @@ def gradiente_total(dPdL_F, dPdL_G, EK):
 
     O termo de aceleração é feito via EK, eliminando necessidade
     de calcular dP/dL|_A soziho """
+    EK = min(EK, 0.99)
     dPdL_T = (-(dPdL_F) - (dPdL_G)) / (1 - EK)
     return dPdL_T
 
