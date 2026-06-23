@@ -16,14 +16,14 @@ S   = 12.5
 g_accel = 9.81
 
 Q_oleo_sm3d = 3500.0
-Q_liq_sm3d  = Q_oleo_sm3d / (1.0 - BSW)   # 4375 sm³/d
+Q_liq_sm3d  = Q_oleo_sm3d / (1.0 - BSW)  
 
 P_res_bar = 250.0
 T_res_C   = 90.0
 
 eps = 6.0e-5 #aço comercial novo em metros
 
-tensao_og = 0.00841 #
+tensao_og = 0.00841 
 tensao_wg = 0.03
 
 TEC_poco    = 2.0
@@ -39,7 +39,7 @@ DIAMETROS_POL = [5]   # polegadas
 CORES         = ["#b4291f" ]
 
 CONV   = 5.6146
-Rs_sup = RGL * CONV         # GOR total em scf/STB 
+Rs_sup = RGL * CONV        
 
 # ============================================================
 # TOPOLOGIA (igual para todos os diâmetros)
@@ -52,6 +52,7 @@ def montar_secoes():
     # 1. Poço: 0 a 1500m
     L1 = 1500.0
     n_poco = int(L1 / dL_step)
+    
     # Ângulo calculado para atingir 500m de profundidade vertical em 1500m de L
     theta_poco = math.degrees(math.asin(500.0 / 1500.0)) 
     for i in range(n_poco):

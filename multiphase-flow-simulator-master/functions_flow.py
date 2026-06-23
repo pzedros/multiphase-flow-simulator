@@ -40,10 +40,9 @@ def pressao_bolha(RGL, dg, T, API):
     # T entra em °C e temos que converter em F
     Tf = T * 9/5 + 32
     a = 0.00091 * Tf - 0.0125 * API
-    Pb = 18.2 * (((RGL / dg) ** 0.83) * 10 ** a - 1.4) #psia
-    #Pb = 18.2 * (((Rs / dg) ** 0.83) * 10 ** a - 1.4)
-    Pb_bar = Pb / 14.5038 #bar
-    return Pb_bar
+    Pb = 18.2 * (((RGL / dg) ** 0.83) * 10 ** a - 1.4) # psia
+    
+    return Pb
 
 def rs_gas_oil(dg, Pbar, Pb, API, T):
     P = Pbar * 14.5038

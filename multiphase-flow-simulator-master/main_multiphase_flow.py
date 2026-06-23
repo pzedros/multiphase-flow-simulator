@@ -19,8 +19,7 @@ pho_w = 965.3 #kg/m³
 
 
 Pb = fc.pressao_bolha(RGL, dg, T, API)
-Pbar = Pb * 0.0689476
-print(Pbar)
+print(Pb)
 
 
 
