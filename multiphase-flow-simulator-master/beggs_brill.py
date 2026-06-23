@@ -213,7 +213,7 @@ def parametro_s(holdup_L, HL):
     """
     y = holdup_L / HL**2
 
-    if 1.0 < y < 1.2:
+    if 1.0 < y <= 1.2:
         s = np.log(2.2 * y - 1.2)
     else:
         ln_y = np.log(y)
