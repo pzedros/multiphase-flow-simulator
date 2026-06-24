@@ -16,14 +16,14 @@ S   = 12.5
 g_accel = 9.81
 
 Q_oleo_sm3d = 3500.0
-Q_liq_sm3d  = Q_oleo_sm3d / (1.0 - BSW)  
+Q_liq_sm3d  = Q_oleo_sm3d / (1.0 - BSW)   # 4375 sm³/d
 
 P_res_bar = 250.0
 T_res_C   = 90.0
 
-eps = 6.0e-5 #aço comercial novo em metros
+eps = 1.5e-5
 
-tensao_og = 0.00841 
+tensao_og = 0.00841
 tensao_wg = 0.03
 
 TEC_poco    = 2.0
@@ -35,11 +35,8 @@ Mg_lbmol = dg * 28.96
 Q_m3s   = Q_liq_sm3d / 86400.0
 qm_kg_s = Q_m3s * 880.0
 
-DIAMETROS_POL = [5]   # polegadas
-CORES         = ["#b4291f" ]
-
-CONV   = 5.6146
-Rs_sup = RGL * CONV        
+DIAMETROS_POL = [ 6]   # polegadas
+CORES         = ["#1f77b4"]
 
 # ============================================================
 # TOPOLOGIA (igual para todos os diâmetros)
@@ -48,30 +45,21 @@ dL_step = 20.0
 
 def montar_secoes():
     secoes = []
-    
-    # 1. Poço: 0 a 1500m
-    L1 = 1500.0
-    n_poco = int(L1 / dL_step)
-    
-    # Ângulo calculado para atingir 500m de profundidade vertical em 1500m de L
-    theta_poco = math.degrees(math.asin(500.0 / 1500.0)) 
+    L_poco_total = 1000.0 / math.sin(math.radians(75.0))
+    n_poco = int(L_poco_total / dL_step)
     for i in range(n_poco):
-        frac = i / n_poco
+        frac  = i / n_poco
         T_amb = 90.0 + (5.0 - 90.0) * frac
-        secoes.append({"theta": theta_poco, "T_amb_C": T_amb, "TEC": TEC_poco, "dL": dL_step})
+        secoes.append({"theta": 75.0, "T_amb_C": T_amb, "TEC": TEC_poco, "dL": dL_step})
 
-    # 2. Flowline (Subsea): 1500 a 3000m (comprimento de 1500m)
-    L2 = 1500.0
-    n_flow = int(L2 / dL_step)
+    theta_flow = math.degrees(math.asin(500.0 / 1500.0))
+    n_flow = int(1500.0 / dL_step)
     for i in range(n_flow):
-        # Temperatura constante no leito marinho
-        secoes.append({"theta": 0.0, "T_amb_C": 5.0, "TEC": TEC_marinho, "dL": dL_step})
+        secoes.append({"theta": theta_flow, "T_amb_C": 5.0, "TEC": TEC_marinho, "dL": dL_step})
 
-    # 3. Riser: 3000 a 4035m (comprimento de 1035m)
-    L3 = 1035.0
-    n_riser = int(L3 / dL_step)
+    n_riser = int(1500.0 / dL_step)
     for i in range(n_riser):
-        frac = i / n_riser
+        frac  = i / n_riser
         T_amb = 5.0 + (12.0 - 5.0) * frac
         secoes.append({"theta": 90.0, "T_amb_C": T_amb, "TEC": TEC_marinho, "dL": dL_step})
 
@@ -80,7 +68,7 @@ def montar_secoes():
 sections_base = montar_secoes()
 
 # Posições para linhas verticais nos gráficos
-L_poco_total = 1.0 / math.sin(math.radians(75.0))
+L_poco_total = 1000.0 / math.sin(math.radians(75.0))
 L_anm      = int(L_poco_total / dL_step) * dL_step
 L_manifold = L_anm + int(1500.0 / dL_step) * dL_step
 
@@ -94,7 +82,7 @@ def simular(D_m, sections):
     T_atual_C   = T_res_C
     L_acumulado = 0.0
 
-    Pb_ini_bar = fc.pressao_bolha(Rs_sup, dg, T_res_C, API) * 0.0689476
+    Pb_ini_bar = fc.pressao_bolha(RGL, dg, T_res_C, API) * 0.0689476
 
     dados = {
         "L_m": [0.0], "P_bar": [P_res_bar], "T_C": [T_res_C],
@@ -129,21 +117,21 @@ def simular(D_m, sections):
         Z = fc.factor_Z(Ppc, Tpc, Ppr, Tpr)
 
         Bg_ft3scf = (14.7 / 519.67) * Z * (TR / P_psia)
-        Bg_SI     = Bg_ft3scf
+        Bg_SI     = Bg_ft3scf * 0.0283168
 
-        Pb = fc.pressao_bolha(Rs_sup, dg, T_C, API)
-        Rs      = fc.rs_gas_oil(dg, P_bar, Pb, API, T_C)
+        Pb_psia = fc.pressao_bolha(RGL, dg, T_C, API)
+        Rs      = fc.rs_gas_oil(dg, P_bar, Pb_psia, API, T_C)
 
-        Bob    = 0.9759 + 0.00012 * (Rs_sup * (dg / do_val) ** 0.5 + 1.25 * Tf) ** 1.2
+        Bob    = 0.9759 + 0.00012 * (RGL * (dg / do_val) ** 0.5 + 1.25 * Tf) ** 1.2
         rho_ob = (62.4 * do_val + 0.0136 * Rs * dg) / Bob
 
-        Co       = fc.compressibilidade_oleo(P_bar, T_C, dg, do_val, Rs, Bob, API, Bg_ft3scf, Pb, rho_ob)
-        Bo       = fc.bo(Rs, dg, do_val, T_C, P_bar, Pb, Co, Rs_sup)
-        Bo_SI    = Bo
+        Co       = fc.compressibilidade_oleo(P_bar, T_C, dg, do_val, Rs, Bob, API, Bg_ft3scf, Pb_psia, rho_ob)
+        Bo       = fc.bo(Rs, dg, do_val, T_C, P_bar, Pb_psia, Co, RGL)
+        Bo_SI    = Bo * 0.158987
 
-        rho_o_si = fc.pho_o_insitu(do_val, Rs, dg, Bo, Bob, P_bar, Pb, Co, Rs_sup, T_C) * 16.018463
+        rho_o_si = fc.pho_o_insitu(do_val, Rs, dg, Bo, Bob, P_bar, Pb_psia, Co, RGL, T_C) * 16.018463
         mu_od    = fc.viscosidade_oleomorto(T_C, API)
-        mu_o_cP  = fc.viscosidade_oleosaturado(Rs, mu_od, P_bar, Pb)
+        mu_o_cP  = fc.viscosidade_oleosaturado(Rs, mu_od, P_bar, Pb_psia)
         mu_o_Pas = mu_o_cP * 1e-3
 
         rho_w_si   = fc.pho_w(S) * 16.018463
@@ -159,7 +147,7 @@ def simular(D_m, sections):
 
         q_oil_s      = Q_m3s * (1.0 - BSW)
         q_wat_s      = Q_m3s * BSW
-        q_gas_livre  = max((RGL - Rs / CONV) * q_oil_s - (rs_w_val / CONV) * q_wat_s, 0.0)
+        q_gas_livre  = max((RGL - Rs) * q_oil_s - rs_w_val * q_wat_s, 0.0)
         q_gas_insitu = q_gas_livre * Bg_SI
         q_liq_insitu = q_oil_s * Bo_SI + q_wat_s * bw_val
 
@@ -208,9 +196,6 @@ def simular(D_m, sections):
         dp_total_Pa_m = -dPdL_T
         P_new_bar = P_atual_bar - dp_total_Pa_m * 1e-5 * dL
 
-        if P_new_bar < 1.0:
-            break
-
         T_amb_K   = T_amb_C + 273.15
         T_old_K   = T_atual_C + 273.15
         theta_rad = math.radians(theta)
@@ -230,7 +215,7 @@ def simular(D_m, sections):
         dados["L_m"].append(L_acumulado)
         dados["P_bar"].append(P_atual_bar)
         dados["T_C"].append(T_atual_C)
-        dados["Pb_bar"].append(fc.pressao_bolha(Rs_sup, dg, T_new_C, API) * 0.0689476)
+        dados["Pb_bar"].append(fc.pressao_bolha(RGL, dg, T_new_C, API) * 0.0689476)
         dados["Holdup"].append(HL)
         dados["Regime"].append(regime_str)
         dados["Vsl"].append(Vsl)
@@ -273,10 +258,8 @@ print("\nArquivos Excel gerados.")
 # ============================================================
 def estilo_padrao():
     plt.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
-    plt.axvline(1500, color="gray", linestyle="--", lw=1.2)
-    plt.axvline(3000, color="gray", linestyle="--",  lw=1.2)
-    
-    
+    plt.axvline(L_anm,      color="gray", linestyle="--", lw=1.2)
+    plt.axvline(L_manifold, color="gray", linestyle=":",  lw=1.2)
     plt.tight_layout()
 
 def plotar(var, titulo, ylabel, logy=False):
@@ -290,10 +273,12 @@ def plotar(var, titulo, ylabel, logy=False):
         ax.set_yscale("log")
     ax.legend(title="Diâmetro", fontsize=11)
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
-    ax.axvline(1500,      color="gray", linestyle="--", lw=1.2)
-    ax.axvline(3000, color="gray", linestyle="--",  lw=1.2)
+    ax.axvline(L_anm,      color="gray", linestyle="--", lw=1.2)
+    ax.axvline(L_manifold, color="gray", linestyle=":",  lw=1.2)
     fig.tight_layout()
-    plt.show()
+    nome = var.replace("/", "_")
+    fig.savefig(f"BB_{nome}.png", dpi=150)
+    plt.close(fig)
 
 # Pressão (com Pb do primeiro diâmetro como referência)
 plt.figure(figsize=(11, 6))
