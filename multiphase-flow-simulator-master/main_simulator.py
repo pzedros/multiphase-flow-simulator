@@ -21,7 +21,7 @@ Q_liq_sm3d  = Q_oleo_sm3d / (1.0 - BSW)   # 4375 sm³/d
 P_res_bar = 250.0
 T_res_C   = 90.0
 
-eps = 1.5e-5
+eps = 4.5e-5  # Rugosidade aço comercial em metros 
 
 tensao_og = 0.00841
 tensao_wg = 0.03
@@ -35,7 +35,7 @@ Mg_lbmol = dg * 28.96
 Q_m3s   = Q_liq_sm3d / 86400.0
 qm_kg_s = Q_m3s * 880.0
 
-DIAMETROS_POL = [ 6]   # polegadas
+DIAMETROS_POL = [5]   # polegadas
 CORES         = ["#1f77b4"]
 
 # ============================================================
@@ -45,21 +45,29 @@ dL_step = 20.0
 
 def montar_secoes():
     secoes = []
-    L_poco_total = 1000.0 / math.sin(math.radians(75.0))
-    n_poco = int(L_poco_total / dL_step)
+    
+    # 1. Poço: 0 a 1500m
+    L1 = 1500.0
+    n_poco = int(L1 / dL_step)
+    # Ângulo calculado para atingir 500m de profundidade vertical em 1500m de L
+    theta_poco = math.degrees(math.asin(500.0 / 1500.0)) 
     for i in range(n_poco):
-        frac  = i / n_poco
+        frac = i / n_poco
         T_amb = 90.0 + (5.0 - 90.0) * frac
         secoes.append({"theta": 75.0, "T_amb_C": T_amb, "TEC": TEC_poco, "dL": dL_step})
 
-    theta_flow = math.degrees(math.asin(500.0 / 1500.0))
-    n_flow = int(1500.0 / dL_step)
+    # 2. Flowline (Subsea): 1500 a 3000m (comprimento de 1500m)
+    L2 = 1500.0
+    n_flow = int(L2 / dL_step)
     for i in range(n_flow):
-        secoes.append({"theta": theta_flow, "T_amb_C": 5.0, "TEC": TEC_marinho, "dL": dL_step})
+        # Temperatura constante no leito marinho
+        secoes.append({"theta": 0.0, "T_amb_C": 5.0, "TEC": TEC_marinho, "dL": dL_step})
 
-    n_riser = int(1500.0 / dL_step)
+    # 3. Riser: 3000 a 4035m (comprimento de 1035m)
+    L3 = 1035.0
+    n_riser = int(L3 / dL_step)
     for i in range(n_riser):
-        frac  = i / n_riser
+        frac = i / n_riser
         T_amb = 5.0 + (12.0 - 5.0) * frac
         secoes.append({"theta": 90.0, "T_amb_C": T_amb, "TEC": TEC_marinho, "dL": dL_step})
 
@@ -67,10 +75,9 @@ def montar_secoes():
 
 sections_base = montar_secoes()
 
-# Posições para linhas verticais nos gráficos
-L_poco_total = 1000.0 / math.sin(math.radians(75.0))
-L_anm      = int(L_poco_total / dL_step) * dL_step
-L_manifold = L_anm + int(1500.0 / dL_step) * dL_step
+# Posições EXATAS para linhas verticais nos gráficos
+L_anm      = 1500.0     
+L_manifold = 3000.0         
 
 # ============================================================
 # FUNÇÃO DE SIMULAÇÃO
@@ -208,9 +215,9 @@ def simular(D_m, sections):
         P_atual_bar  = P_new_bar
         T_atual_C    = T_new_C
 
-        dp_total_bm = dp_total_Pa_m * 1e-5
-        dp_fric_bm  = dPdL_F * 1e-5
-        dp_grav_bm  = dPdL_G * 1e-5
+        dp_total_bm = dp_total_Pa_m 
+        dp_fric_bm  = dPdL_F 
+        dp_grav_bm  = dPdL_G 
 
         dados["L_m"].append(L_acumulado)
         dados["P_bar"].append(P_atual_bar)
@@ -260,6 +267,7 @@ def estilo_padrao():
     plt.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
     plt.axvline(L_anm,      color="gray", linestyle="--", lw=1.2)
     plt.axvline(L_manifold, color="gray", linestyle=":",  lw=1.2)
+    plt.axvline(x=3000.0, color="gray", linestyle="--", lw=1.5, label="Manifold (3000m)")
     plt.tight_layout()
 
 def plotar(var, titulo, ylabel, logy=False):
