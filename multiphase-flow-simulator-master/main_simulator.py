@@ -29,55 +29,49 @@ tensao_wg = 0.03
 TEC_poco    = 2.0
 TEC_marinho = 1.0
 
+
+# --- Temperaturas Ambientais ---
+T_fundo_mar_C = 5.0     # °C
+T_superficie_C = 12.0   # °C
+
 do_val   = 141.5 / (API + 131.5)
 Mg_lbmol = dg * 28.96
 
 Q_m3s   = Q_liq_sm3d / 86400.0
 qm_kg_s = Q_m3s * 880.0
 
-DIAMETROS_POL = [5]   # polegadas
+DIAMETROS_POL = [6]   # polegadas
 CORES         = ["#1f77b4"]
 
 # ============================================================
 # TOPOLOGIA (igual para todos os diâmetros)
 # ============================================================
-dL_step = 20.0
+dL_step = 10.0 
+sections = []
 
-def montar_secoes():
-    secoes = []
-    
-    # 1. Poço: 0 a 1500m
-    L1 = 1500.0
-    n_poco = int(L1 / dL_step)
-    # Ângulo calculado para atingir 500m de profundidade vertical em 1500m de L
-    theta_poco = math.degrees(math.asin(500.0 / 1500.0)) 
-    for i in range(n_poco):
-        frac = i / n_poco
-        T_amb = 90.0 + (5.0 - 90.0) * frac
-        secoes.append({"theta": 75.0, "T_amb_C": T_amb, "TEC": TEC_poco, "dL": dL_step})
+# Poço (0->1035m)
+for i in range(int((1035 - 0) / dL_step)):
+    frac = i / int((1035 - 0) / dL_step)
+    T_amb = 90.0 + (5.0 - 90.0) * frac
+    sections.append({"theta": 75.0, "T_amb_C": T_amb, "TEC": TEC_poco, "dL": dL_step})
 
-    # 2. Flowline (Subsea): 1500 a 3000m (comprimento de 1500m)
-    L2 = 1500.0
-    n_flow = int(L2 / dL_step)
-    for i in range(n_flow):
-        # Temperatura constante no leito marinho
-        secoes.append({"theta": 0.0, "T_amb_C": 5.0, "TEC": TEC_marinho, "dL": dL_step})
+# Flowline (1500m))
+L_flow = 1500.0
+for i in range(int(L_flow / dL_step)):
+    sections.append({"theta": 19.47, "T_amb_C": T_fundo_mar_C, "TEC": TEC_marinho, "dL": dL_step})
 
-    # 3. Riser: 3000 a 4035m (comprimento de 1035m)
-    L3 = 1035.0
-    n_riser = int(L3 / dL_step)
-    for i in range(n_riser):
-        frac = i / n_riser
-        T_amb = 5.0 + (12.0 - 5.0) * frac
-        secoes.append({"theta": 90.0, "T_amb_C": T_amb, "TEC": TEC_marinho, "dL": dL_step})
+# Riser (1500m))
+for i in range(int(1500.0 / dL_step)):
+    frac = i / int(1500.0 / dL_step)
+    T_amb = 5.0 + (12.0 - 5.0) * frac
+    sections.append({"theta": 90.0, "T_amb_C": T_amb, "TEC": TEC_marinho, "dL": dL_step})
 
-    return secoes
+L_total_sistema = sum([s['dL'] for s in sections])
 
-sections_base = montar_secoes()
 
 # Posições EXATAS para linhas verticais nos gráficos
-L_anm      = 1500.0     
-L_manifold = 3000.0         
+L_anm      = 1035.0     
+L_manifold = 2535.0         
 
 # ============================================================
 # FUNÇÃO DE SIMULAÇÃO
@@ -87,7 +81,7 @@ def simular(D_m, sections):
 
     P_atual_bar = P_res_bar
     T_atual_C   = T_res_C
-    L_acumulado = 0.0
+    L_acumulado = 0.0   
 
     Pb_ini_bar = fc.pressao_bolha(RGL, dg, T_res_C, API) * 0.0689476
 
@@ -215,9 +209,9 @@ def simular(D_m, sections):
         P_atual_bar  = P_new_bar
         T_atual_C    = T_new_C
 
-        dp_total_bm = dp_total_Pa_m 
-        dp_fric_bm  = dPdL_F 
-        dp_grav_bm  = dPdL_G 
+        dp_total_bm = dp_total_Pa_m*1e-5
+        dp_fric_bm  = dPdL_F*1e-5
+        dp_grav_bm  = dPdL_G*1e-5
 
         dados["L_m"].append(L_acumulado)
         dados["P_bar"].append(P_atual_bar)
@@ -252,11 +246,11 @@ resultados = {}
 for D_pol in DIAMETROS_POL:
     D_m = D_pol * 0.0254
     print(f"Simulando D = {D_pol} pol ({D_m:.4f} m)...")
-    df, L_total = simular(D_m, sections_base)
+    df, L_total = simular(D_m, sections)
     P_chegada = df["P_bar"].iloc[-1]
     print(f"  Pressão de chegada: {P_chegada:.2f} bar | {'SUCESSO' if P_chegada >= 1.013 else 'FALHA'}")
     resultados[D_pol] = df
-    df.to_excel(f"Relatorio_BB_{D_pol}pol.xlsx", index=False)
+    df.to_excel(f"Relatorio_no Excel_{D_pol}pol.xlsx", index=False)
 
 print("\nArquivos Excel gerados.")
 
@@ -266,7 +260,7 @@ print("\nArquivos Excel gerados.")
 def estilo_padrao():
     plt.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
     plt.axvline(L_anm,      color="gray", linestyle="--", lw=1.2)
-    plt.axvline(L_manifold, color="gray", linestyle=":",  lw=1.2)
+    plt.axvline(L_manifold, color="gray", linestyle="--",  lw=1.2)
     plt.axvline(x=3000.0, color="gray", linestyle="--", lw=1.5, label="Manifold (3000m)")
     plt.tight_layout()
 
@@ -282,7 +276,7 @@ def plotar(var, titulo, ylabel, logy=False):
     ax.legend(title="Diâmetro", fontsize=11)
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
     ax.axvline(L_anm,      color="gray", linestyle="--", lw=1.2)
-    ax.axvline(L_manifold, color="gray", linestyle=":",  lw=1.2)
+    ax.axvline(L_manifold, color="gray", linestyle="--",  lw=1.2)
     fig.tight_layout()
     nome = var.replace("/", "_")
     fig.savefig(f"BB_{nome}.png", dpi=150)
@@ -296,28 +290,305 @@ for D_pol, cor in zip(DIAMETROS_POL, CORES):
 plt.plot(resultados[DIAMETROS_POL[0]]["L_m"],
          resultados[DIAMETROS_POL[0]]["Pb_bar"],
          color="black", lw=1.5, linestyle="--", label="Pressão de Bolha")
-plt.axhline(1.01325, color="black", linestyle=":", lw=1.5, label="Pressão Atm.")
+plt.axhline(1.01325, color="black", linestyle="--", lw=1.5, label="Pressão Atm.")
 plt.title("Pressão ao longo do sistema — Beggs & Brill", fontsize=14)
 plt.xlabel("Comprimento (m)"); plt.ylabel("Pressão (bar)")
 plt.legend(title="Diâmetro", fontsize=11)
 estilo_padrao()
 plt.show()
+# ==========================================================
+# GRÁFICOS INDIVIDUAIS
+# ==========================================================
 
-plotar("T_C",     "Temperatura",                  "T (°C)")
-plotar("Holdup",  "Holdup Líquido",               "H_L (-)")
-plotar("Vsg",     "Velocidade Superficial do Gás","Vsg (m/s)")
-plotar("Vsl",     "Velocidade Superficial do Líquido", "Vsl (m/s)")
-plotar("Vm",      "Velocidade da Mistura",         "Vm (m/s)")
-plotar("Bo",      "Fator de Volume do Óleo",       "Bo (m³/m³)")
-plotar("Bg",      "Fator de Volume do Gás",        "Bg (m³/sm³)")
-plotar("dp_fric", "Gradiente — Fricção",           "dP/dL (bar/m)")
-plotar("dp_grav", "Gradiente — Gravidade",         "dP/dL (bar/m)")
-plotar("dp_acc",  "Gradiente — Aceleração",        "dP/dL (bar/m)")
-plotar("dp_total","Gradiente Total de Pressão",    "dP/dL (bar/m)")
-plotar("rho_o",   "Densidade do Óleo",             "kg/m³")
-plotar("rho_g",   "Densidade do Gás",              "kg/m³")
-plotar("rho_w",   "Densidade da Água",             "kg/m³")
-plotar("rho_mix", "Densidade da Mistura (slip)",   "kg/m³")
-plotar("mu_o",    "Viscosidade do Óleo",           "Pa.s")
-plotar("mu_g",    "Viscosidade do Gás",            "Pa.s")
-plotar("mu_mix",  "Viscosidade da Mistura",        "Pa.s")
+df = resultados[DIAMETROS_POL[0]]
+
+# --------------------------------------------------
+# Pressão de Bolha
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["Pb_bar"], lw=2)
+plt.title("Pressão de Bolha — Beggs & Brill", fontsize=14)
+plt.axvline(L_anm,      color="gray", linestyle="--", lw=1.2)
+plt.axvline(L_manifold, color="gray", linestyle="--",  lw=1.2)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Pb (bar)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Temperatura
+# --------------------------------------------------
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["T_C"], lw=2)
+plt.title("Temperatura — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("T (°C)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Holdup
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["Holdup"], lw=2)
+plt.title("Holdup Líquido — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("HL (-)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Bo
+# --------------------------------------------------
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["Bo"], lw=2)
+plt.title("Fator de Volume do Óleo — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Bo")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Bg
+# --------------------------------------------------
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["Bg"], lw=2)
+plt.title("Fator de Volume do Gás — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Bg")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Vsg
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["Vsg"], lw=2)
+plt.title("Velocidade Superficial do Gás — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Vsg (m/s)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Vsl
+
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["Vsl"], lw=2)
+plt.title("Velocidade Superficial do Líquido — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Vsl (m/s)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Vm
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["Vm"], lw=2)
+plt.title("Velocidade da Mistura — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Vm (m/s)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Gradiente Friccional
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["dp_fric"], lw=2)
+plt.title("Gradiente de Fricção — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("dP/dL (bar/m)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Gradiente Gravitacional
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["dp_grav"], lw=2)
+plt.title("Gradiente Gravitacional — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("dP/dL (bar/m)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Gradiente de Aceleração
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["dp_acc"], lw=2)
+plt.title("Gradiente de Aceleração — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("dP/dL (bar/m)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Gradiente Total
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["dp_total"], lw=2)
+plt.title("Gradiente Total — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("dP/dL (bar/m)")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Termos da perda de carga
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["dp_fric"], lw=2, label='Fricção')
+plt.plot(df["L_m"], df["dp_grav"], lw=2, label='Gravidade')
+plt.plot(df["L_m"], df["dp_acc"], '--', lw=2, label='Aceleração')
+plt.title("Termos de Perda de Carga — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("dP/dL (bar/m)")
+plt.legend()
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Densidade Óleo
+# --------------------------------------------------
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["rho_o"], lw=2)
+plt.title("Densidade do Óleo — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("kg/m³")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Densidade Água
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["rho_w"], lw=2)
+plt.title("Densidade da Água — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("kg/m³")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Densidade Gás
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["rho_g"], lw=2)
+plt.title("Densidade do Gás — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("kg/m³")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Densidade Líquido
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["rho_liq"], lw=2)
+plt.title("Densidade do Líquido — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("kg/m³")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Densidade Mistura
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["rho_mix"], lw=2)
+plt.title("Densidade da Mistura — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("kg/m³")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Componentes das densidades
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["rho_o"], lw=2, label='Óleo')
+plt.plot(df["L_m"], df["rho_w"], lw=2, label='Água')
+plt.plot(df["L_m"], df["rho_g"], '--', lw=2, label='Gás')
+plt.plot(df["L_m"], df["rho_liq"], lw=2, label='Líquido')
+plt.plot(df["L_m"], df["rho_mix"], '-.', lw=2, label='Mistura')
+plt.title("Componentes da Massa Específica — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("kg/m³")
+plt.legend()
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Viscosidade Óleo
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["mu_o"], lw=2)
+plt.title("Viscosidade do Óleo — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Pa.s")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Viscosidade Gás
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["mu_g"], lw=2)
+plt.title("Viscosidade do Gás — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Pa.s")
+estilo_padrao()
+plt.show()
+
+
+# --------------------------------------------------
+# Viscosidade Mistura
+# --------------------------------------------------
+
+plt.figure(figsize=(11,6))
+plt.plot(df["L_m"], df["mu_mix"], lw=2)
+plt.title("Viscosidade da Mistura — Beggs & Brill", fontsize=14)
+plt.xlabel("Comprimento (m)")
+plt.ylabel("Pa.s")
+estilo_padrao()
+plt.show()
